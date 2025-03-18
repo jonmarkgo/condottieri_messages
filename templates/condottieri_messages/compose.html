@@ -2,9 +2,10 @@
 
 {% load i18n %}
 {% load crispy_forms_tags %}
+{% load static %}
 
 {% block extra_extra_head %}
-<link rel="stylesheet" href="{{ STATIC_URL }}condottieri_messages/css/condottieri_messages.css" />
+<link rel="stylesheet" href="{% static 'condottieri_messages/css/condottieri_messages.css' %}" />
 {% endblock %}
 
 {% block actions %}
@@ -38,5 +39,5 @@ New letter for {{ country }}
 {% endif %}
 </form>
 
-<p><a href="{% url "show-game" game.slug %}">{% trans "Return to game" %}</a></p>
+<p><a href="{% url 'machiavelli:show_game' game.slug %}">{% trans "Return to game" %}</a></p>
 {% endblock %}

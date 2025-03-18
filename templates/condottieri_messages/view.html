@@ -1,8 +1,9 @@
 {% extends "machiavelli/show_game.html" %} 
 {% load i18n %} 
+{% load static %}
 
 {% block extra_extra_head %}
-<link rel="stylesheet" href="{{ STATIC_URL }}condottieri_messages/css/condottieri_messages.css" />
+<link rel="stylesheet" href="{% static 'condottieri_messages/css/condottieri_messages.css' %}" />
 {% endblock %}
 
 {% block actions %}
@@ -22,7 +23,7 @@
 <a href="{% url "condottieri_messages_reply" message.letter.id %}">{% trans "Reply" %}</a> |
 {% endif %}
 <a href="{% url "messages_delete" message.id %}?next={{ game.get_absolute_url }}">{% trans "Delete" %}</a> |
-<a href="{% url "show-game" game.slug %}">{% trans "Return to game" %}</a>
+<a href="{% url 'machiavelli:show_game' game.slug %}">{% trans "Return to game" %}</a>
 </p>
 
 {% endblock %}
