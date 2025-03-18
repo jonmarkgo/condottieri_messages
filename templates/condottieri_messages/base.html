@@ -11,9 +11,9 @@
 
 {% block subnav %}
 <ul>
-<li><a href="{% url "messages_inbox" %} ">{% trans "Inbox" %}</a></li>
-<li><a href="{% url "messages_outbox" %} ">{% trans "Sent Messages" %}</a></li>
-<li><a href="{% url "messages_trash" %} ">{% trans "Trash" %}</a></li>
+<li><a href="{% url 'condottieri_messages:inbox' %}">{% trans "Inbox" %}</a></li>
+<li><a href="{% url 'condottieri_messages:outbox' %}">{% trans "Sent Messages" %}</a></li>
+<li><a href="{% url 'condottieri_messages:trash' %}">{% trans "Trash" %}</a></li>
 </ul>
 {% endblock %}
 

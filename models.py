@@ -47,7 +47,7 @@ class Letter(messages.Message):
                 super(Letter, self).save(*args, **kwargs)
         
         def get_absolute_url(self):
-                return reverse('condottieri_messages_detail', [self.id])
+                return reverse('condottieri_messages:view', args=[self.id])
 
 def notify_new_letter(sender, instance, created, raw, **kw):
     if notification and isinstance(instance, Letter) and created and not raw:

@@ -25,20 +25,14 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.decorators import method_decorator
 from django.urls import reverse
 from django.conf import global_settings
-
 from django.views.generic.list import ListView
-
-from django_messages.utils import format_quote
-from django_messages.models import Message
-
 from django.contrib import messages
 
 from machiavelli.models import Player, Game
 from machiavelli.views import get_game_context
 
 from condottieri_messages.exceptions import LetterError
-
-import condottieri_messages.forms as forms
+from condottieri_messages.forms import letter_form_factory
 from condottieri_messages.models import Letter
 
 class LoginRequiredMixin(object):
@@ -70,7 +64,7 @@ def compose(request, sender_id=None, recipient_id=None, letter_id=None):
 		sender_player = get_object_or_404(Player, user=request.user, id=sender_id)
 		game = sender_player.game
 		recipient_player = get_object_or_404(Player, id=recipient_id, game=game)
-		parent = Letter.objects.none()
+		parent = None
 	elif letter_id:
 		parent = get_object_or_404(Letter, id=letter_id)
 		if parent.sender != request.user and parent.recipient != request.user:
@@ -101,63 +95,32 @@ def compose(request, sender_id=None, recipient_id=None, letter_id=None):
 		if common_language_code in list(lang_dict.keys()):
 			common_language = lang_dict[common_language_code]
 		context.update({'common_language': common_language })
-	LetterForm = forms.letter_form_factory(sender_player, recipient_player)
+	LetterForm = letter_form_factory(sender_player, recipient_player)
 	if request.method == 'POST':
 		letter_form = LetterForm(sender_player, recipient_player, data=request.POST)
 		if letter_form.is_valid():
-			bcc_errors = False
-			bcc = letter_form.cleaned_data["bcc"]
-			excom = False
-			for r in bcc:
-				try:
-					check_errors(request, game, sender_player, r)
-				except LetterError as e:
-					bcc_errors = True
-					messages.error(request, e.value)
-			if not bcc_errors:
-				letter = letter_form.save()
-				for r in bcc:
-					letter_copy = Letter(sender_player=letter.sender_player,
-						recipient_player=r,
-						subject=letter.subject,
-						body=letter.body)
-					letter_copy.save()
-					if not sender_player.is_excommunicated and \
-						r.is_excommunicated:
-						excom = True
-
-				messages.success(request, _("The letter has been successfully sent."))
-				## check if sender must be excommunicated
-				if not sender_player.is_excommunicated and \
-					recipient_player.is_excommunicated:
-					excom = True
-				if excom:
-					sender_player.set_excommunication(by_pope=False)
-					messages.info(request, _("You have been excommunicated."))
-				return redirect(game)
-	else:
-		if parent:
-			initial = {'body': str(format_quote(recipient_player.contender, parent.body)),
-					'subject': _("Re: %(subject)s") % {'subject': parent.subject},
-					}
-		else:
-			initial = {}
-		letter_form = LetterForm(sender_player,
-								recipient_player,
-								initial=initial)
-		if not sender_player.is_excommunicated and recipient_player.is_excommunicated:
-			context['excom_notice'] = True
-		if sender_player.is_excommunicated and not recipient_player.is_excommunicated:
-			messages.error(request, _("You can write letters only to other excommunicated countries."))
+			letter = letter_form.save()
+			messages.success(request, _("Letter successfully sent."))
 			return redirect(game)
+	else:
+		initial = {}
+		if parent:
+			initial = {
+				'subject': _("Re: %(subject)s") % {'subject': parent.subject},
+				'body': _("\nOn %(sent_at)s, %(sender)s wrote:\n%(body)s") % {
+					'sent_at': parent.sent_at.strftime("%Y-%m-%d %H:%M"),
+					'sender': parent.sender,
+					'body': parent.body
+				}
+			}
+		letter_form = LetterForm(sender_player, recipient_player, initial=initial)
 	
-	context.update({'form': letter_form,
-					'sender_player': sender_player,
-					'recipient_player': recipient_player,
-					})
-
-	return render(request, 'condottieri_messages/compose.html',
-							context)
+	context.update({
+		'form': letter_form,
+		'sender_player': sender_player,
+		'recipient_player': recipient_player,
+	})
+	return render(request, 'condottieri_messages/compose.html', context)
 
 @login_required
 def view(request, message_id):
@@ -187,37 +150,46 @@ def view(request, message_id):
 
 class BoxListView(LoginRequiredMixin, ListView):
 	allow_empty = True
-	model = Message
+	model = Letter
 	paginate_by = 25
 	context_object_name = 'message_list'
 	template_name = 'condottieri_messages/messages_box.html'
-	box = None
 
 	allowed_boxes = ['inbox', 'outbox', 'trash']
 
+	def get_box_type(self):
+		"""Get the box type from the URL name."""
+		url_name = self.request.resolver_match.url_name
+		return url_name if url_name in self.allowed_boxes else None
+
 	def get_queryset(self):
-		if not self.box in self.allowed_boxes:
-			return Message.objects.none()
-		if self.box == 'inbox':
-			message_list = Message.objects.inbox_for(self.request.user)
-		elif self.box == 'outbox':
-			message_list = Message.objects.outbox_for(self.request.user)
-		elif self.box == 'trash':
-			message_list = Message.objects.trash_for(self.request.user)
+		box_type = self.get_box_type()
+		if not box_type:
+			return Letter.objects.none()
+			
+		if box_type == 'inbox':
+			message_list = Letter.objects.inbox_for(self.request.user)
+		elif box_type == 'outbox':
+			message_list = Letter.objects.outbox_for(self.request.user)
+		elif box_type == 'trash':
+			message_list = Letter.objects.trash_for(self.request.user)
+		else:
+			return Letter.objects.none()
+
 		try:
 			slug = self.kwargs['slug']
 		except KeyError:
 			pass
 		else:
 			self.game = get_object_or_404(Game, slug=slug)
-			message_list = message_list.filter(letter__sender_player__game=self.game)
-		return message_list
+			message_list = message_list.filter(sender_player__game=self.game)
+		return message_list.order_by('-sent_at')
 
 	def get_context_data(self, **kwargs):
 		context = super(BoxListView, self).get_context_data(**kwargs)
 		if hasattr(self, 'game'):
 			context['game'] = self.game
-		context['box'] = self.box
+		context['box'] = self.get_box_type()
 		return context
 
 ##
@@ -240,10 +212,10 @@ def delete(request, message_id, success_url=None):
     """
     user = request.user
     now = datetime.datetime.now()
-    message = get_object_or_404(Message, id=message_id)
+    message = get_object_or_404(Letter, id=message_id)
     deleted = False
     if success_url is None:
-        success_url = reverse('messages_inbox')
+        success_url = reverse('condottieri_messages:inbox')
     if 'next' in request.GET:
         success_url = request.GET['next']
     if message.sender == user:
@@ -262,19 +234,20 @@ def delete(request, message_id, success_url=None):
 def undelete(request, message_id, success_url=None):
     """
     Recovers a message from trash. This is achieved by removing the
-    ``(sender|recipient)_deleted_at`` from the model.
+    ``sender_deleted_at`` or ``recipient_deleted_at`` timestamps, depending
+    on the user.
     """
     user = request.user
-    message = get_object_or_404(Message, id=message_id)
+    message = get_object_or_404(Letter, id=message_id)
     undeleted = False
     if success_url is None:
-        success_url = reverse('messages_inbox')
+        success_url = reverse('condottieri_messages:inbox')
     if 'next' in request.GET:
         success_url = request.GET['next']
-    if message.sender == user:
+    if message.sender == user and message.sender_deleted_at:
         message.sender_deleted_at = None
         undeleted = True
-    if message.recipient == user:
+    if message.recipient == user and message.recipient_deleted_at:
         message.recipient_deleted_at = None
         undeleted = True
     if undeleted:
@@ -282,4 +255,11 @@ def undelete(request, message_id, success_url=None):
         messages.success(request, _("Message successfully recovered."))
         return HttpResponseRedirect(success_url)
     raise Http404
+
+@login_required
+def reply(request, message_id):
+	parent = get_object_or_404(Letter, id=message_id)
+	if parent.sender != request.user and parent.recipient != request.user:
+		raise Http404
+	return compose(request, letter_id=message_id)
 

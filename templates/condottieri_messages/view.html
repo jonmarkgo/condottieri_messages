@@ -15,14 +15,13 @@
 
 <div id="letter_body">{{ message.body|linebreaks }}</div>
 
-
 </div>
 
 <p>
 {% if message.recipient.pk == user.pk %}
-<a href="{% url "condottieri_messages_reply" message.letter.id %}">{% trans "Reply" %}</a> |
+<a href="{% url 'condottieri_messages:reply' message.letter.id %}">{% trans "Reply" %}</a> |
 {% endif %}
-<a href="{% url "messages_delete" message.id %}?next={{ game.get_absolute_url }}">{% trans "Delete" %}</a> |
+<a href="{% url 'condottieri_messages:delete' message.id %}?next={{ game.get_absolute_url }}">{% trans "Delete" %}</a> |
 <a href="{% url 'machiavelli:show_game' game.slug %}">{% trans "Return to game" %}</a>
 </p>
 

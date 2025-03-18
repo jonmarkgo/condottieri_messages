@@ -1,23 +1,38 @@
 from django.urls import path, re_path
-from django.views.generic.base import RedirectView
+from django.views.generic import RedirectView
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from django.views.generic import ListView
+from django.shortcuts import get_object_or_404
+from django.contrib import messages
+from django.http import Http404
+from django.urls import reverse
+from django.utils.translation import ugettext_lazy as _
+from django.contrib.auth.models import User
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.cache import cache
+from django.db.models import Q
+from django.utils import timezone
 
-from . import views
+from .models import Letter
+from .forms import letter_form_factory
+from .views import compose, reply, view, delete, undelete, BoxListView
+
+app_name = 'condottieri_messages'
 
 ## urls that call the views in messages
 urlpatterns = [
-    path('', RedirectView.as_view(url='inbox/')),
+    path('', RedirectView.as_view(url='inbox/'), name='messages_redirect'),
 ]
 
 ## urls that call the custom views in condottieri_messages
 urlpatterns += [
-    re_path(r'^compose/(?P<sender_id>[\d]+)/(?P<recipient_id>[\d]+)/$', views.compose, name='condottieri_messages_compose'),
-    re_path(r'^reply/(?P<letter_id>[\d]+)/$', views.compose, name='condottieri_messages_reply'),
-    re_path(r'^view/(?P<message_id>[\d]+)/$', views.view, name='condottieri_messages_detail'),
-    path('inbox/', views.BoxListView.as_view(box='inbox'), name='messages_inbox'),
-    path('outbox/', views.BoxListView.as_view(box='outbox'), name='messages_outbox'),
-    path('trash/', views.BoxListView.as_view(box='trash'), name='messages_trash'),
-    re_path(r'^inbox/(?P<slug>[-\w]+)/$', views.BoxListView.as_view(box='inbox'), name='condottieri_messages_inbox'),
-    re_path(r'^outbox/(?P<slug>[-\w]+)/$', views.BoxListView.as_view(box='outbox'), name='condottieri_messages_outbox'),
-    re_path(r'^delete/(?P<message_id>[\d]+)/$', views.delete, name='messages_delete'),
-    re_path(r'^undelete/(?P<message_id>[\d]+)/$', views.undelete, name='messages_undelete'),
+    path('inbox/', BoxListView.as_view(), name='inbox'),
+    path('outbox/', BoxListView.as_view(), name='outbox'),
+    path('trash/', BoxListView.as_view(), name='trash'),
+    re_path(r'^compose/$', compose, name='compose'),
+    re_path(r'^reply/(?P<message_id>[\d]+)/$', reply, name='reply'),
+    re_path(r'^view/(?P<message_id>[\d]+)/$', view, name='view'),
+    re_path(r'^delete/(?P<message_id>[\d]+)/$', delete, name='delete'),
+    re_path(r'^undelete/(?P<message_id>[\d]+)/$', undelete, name='undelete'),
 ]
